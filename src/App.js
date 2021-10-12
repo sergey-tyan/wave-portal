@@ -4,10 +4,11 @@ import './App.css';
 import abi from './utils/WavePortal.json';
 
 const contractAddress = '0x238A7111909b6A6AE571BFeBA6C6ca1C49a8693b';
+const contractABI = abi.abi;
 
 export default function App() {
-  const contractABI = abi.abi;
-
+  const [counter, setCounter] = useState(0);
+  const [mining, setMining] = useState(false);
   const wave = async () => {
     try {
       const { ethereum } = window;
@@ -18,12 +19,12 @@ export default function App() {
         const wavePortalContract = new ethers.Contract(
           contractAddress,
           contractABI,
-          signer
+          signer,
         );
 
         let count = await wavePortalContract.getTotalWaves();
         console.log('Retrieved total wave count...', count.toNumber());
-
+        setMining(true);
         const waveTxn = await wavePortalContract.wave();
         console.log('Mining...', waveTxn.hash);
 
@@ -31,6 +32,8 @@ export default function App() {
         console.log('Mined -- ', waveTxn.hash);
 
         count = await wavePortalContract.getTotalWaves();
+        setCounter(count.toNumber());
+        setMining(false);
         console.log('Retrieved total wave count...', count.toNumber());
       } else {
         console.log("Ethereum object doesn't exist!");
@@ -50,6 +53,16 @@ export default function App() {
         console.log('Make sure you have metamask!');
         return;
       } else {
+        const provider = new ethers.providers.Web3Provider(ethereum);
+        const signer = provider.getSigner();
+        const wavePortalContract = new ethers.Contract(
+          contractAddress,
+          contractABI,
+          signer,
+        );
+
+        let count = await wavePortalContract.getTotalWaves();
+        setCounter(count.toNumber());
         console.log('We have the ethereum object', ethereum);
       }
 
@@ -100,15 +113,14 @@ export default function App() {
   return (
     <div className="mainContainer">
       <div className="dataContainer">
-        <div className="header">👋 Hey there!</div>
+        <div className="header">🪀 Hey there!</div>
 
-        <div className="bio">
-          I am Sereja and I worked on self-driving cars so that's pretty cool
-          right? Connect your Ethereum wallet and wave at me!
-        </div>
-
+        <h1>Current count is {counter}</h1>
+        {mining && (
+          <img src="https://i.imgur.com/FDI8tdh.gif" alt="Dudes mining stuff" />
+        )}
         <button className="waveButton" onClick={wave}>
-          Wave at Me
+          Increment the counter!
         </button>
 
         {!currentAccount && (

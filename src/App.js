@@ -18,52 +18,93 @@ const getWavePortalContract = (ethereum) => {
   return wavePortalContract;
 };
 
+function Loading() {
+  return (
+    <div className="lds-ring">
+      <div></div>
+      <div></div>
+      <div></div>
+      <div></div>
+    </div>
+  );
+}
+
 export default function App() {
   const [mining, setMining] = useState(false);
-  const [showColorPicker, setShowColorPicker] = useState(true);
+  const [showColorPicker, setShowColorPicker] = useState(false);
   const [activeCell, setActiveCell] = useState({ x: 0, y: 0 });
+  const [tempColor, setTempColor] = useState('#fff');
   const [cells, setCells] = useState([]);
   const [currentAccount, setCurrentAccount] = useState('');
 
+  const hideColorPicker = () => {
+    setShowColorPicker(false);
+  };
+
   const escFunction = useCallback((event) => {
     if (event.keyCode === 27) {
-      setShowColorPicker(false);
+      hideColorPicker();
     }
   }, []);
 
   useEffect(() => {
     document.addEventListener('keydown', escFunction, false);
-
     return () => {
       document.removeEventListener('keydown', escFunction, false);
     };
   });
 
-  const wave = async () => {
-    // try {
-    //   const { ethereum } = window;
-    //   if (!ethereum) {
-    //     return console.log("Ethereum object doesn't exist!");
-    //   }
-    //   const wavePortalContract = getWavePortalContract(ethereum);
-    //   let count = await wavePortalContract.getTotalWaves();
-    //   console.log('Retrieved total wave count...', count.toNumber());
-    //   setMining(true);
-    //   const waveTxn = await wavePortalContract.wave(inputEl.current.value, {
-    //     gasLimit: 300000,
-    //   });
-    //   inputEl.current.value = '';
-    //   console.log('Mining...', waveTxn.hash);
-    //   await waveTxn.wait();
-    //   console.log('Mined -- ', waveTxn.hash);
-    //   count = await wavePortalContract.getTotalWaves();
-    //   setCounter(count.toNumber());
-    //   setMining(false);
-    //   console.log('Retrieved total wave count...', count.toNumber());
-    // } catch (error) {
-    //   setMining(false);
-    //   console.log(error);
-    // }
+  const updateCell = async () => {
+    try {
+      const { ethereum } = window;
+      if (!ethereum) {
+        return console.log("Ethereum object doesn't exist!");
+      }
+      const wavePortalContract = getWavePortalContract(ethereum);
+      setMining(true);
+      const waveTxn = await wavePortalContract.addCell(
+        tempColor,
+        activeCell.x,
+        activeCell.y,
+        {
+          gasLimit: 300000,
+        },
+      );
+      await waveTxn.wait();
+      await updateAllCellsFromETH(wavePortalContract);
+    } catch (error) {
+      console.log(error);
+    } finally {
+      setMining(false);
+    }
+  };
+
+  const updateCellColor = (x, y, color, from) => {
+    console.log({ x, y, color });
+    setCells((prevCells) => {
+      const newCells = [...prevCells];
+      newCells[x][y].color = color;
+      newCells[x][y].author = from;
+      return newCells;
+    });
+  };
+
+  const updateAllCellsFromETH = async (wavePortalContract) => {
+    const rawGrid = await wavePortalContract.getAllCells();
+    const cells = [];
+    rawGrid.forEach((rawItem) => {
+      const row = [];
+      rawItem.forEach((cell) => {
+        row.push({
+          color: cell.color,
+          author: cell.author,
+        });
+      });
+      cells.push(row);
+    });
+    console.log({ cells, rawGrid });
+
+    setCells(cells);
   };
 
   const getAllCells = async () => {
@@ -73,33 +114,11 @@ export default function App() {
         return console.log("Ethereum object doesn't exist!");
       }
       const wavePortalContract = getWavePortalContract(ethereum);
-      const rawGrid = await wavePortalContract.getAllCells();
-      const cells = [];
-      rawGrid.forEach((rawItem) => {
-        const row = [];
-        rawItem.forEach((cell) => {
-          row.push({
-            color: cell.color,
-            author: cell.author,
-          });
-        });
-        cells.push(row);
-      });
-      console.log({ cells, rawGrid });
-
-      setCells(cells);
+      await updateAllCellsFromETH(wavePortalContract);
 
       wavePortalContract.on('NewCell', (from, timestamp, color, x, y) => {
         console.log({ from, timestamp, color, x, y });
-
-        // setAllWaves((prevState) => [
-        //   ...prevState,
-        //   {
-        //     address: from,
-        //     timestamp: new Date(timestamp * 1000),
-        //     message: message,
-        //   },
-        // ]);
+        updateCellColor(x, y, color, from);
       });
     } catch (error) {
       console.log(error);
@@ -133,16 +152,13 @@ export default function App() {
   const connectWallet = async () => {
     try {
       const { ethereum } = window;
-
       if (!ethereum) {
         alert('Get MetaMask!');
         return;
       }
-
       const accounts = await ethereum.request({
         method: 'eth_requestAccounts',
       });
-
       console.log('Connected', accounts[0]);
       setCurrentAccount(accounts[0]);
     } catch (error) {
@@ -151,21 +167,11 @@ export default function App() {
   };
 
   useEffect(() => {
-    checkIfWalletIsConnected();
-  }, []);
-
-  useEffect(() => {
     getAllCells();
   }, []);
-
-  const updateCellColor = (x, y, color) => {
-    console.log({ x, y, color });
-    setCells((prevCells) => {
-      const newCells = [...prevCells];
-      newCells[x][y].color = color;
-      return newCells;
-    });
-  };
+  useEffect(() => {
+    checkIfWalletIsConnected();
+  }, []);
 
   const picker = showColorPicker && (
     <div
@@ -173,20 +179,43 @@ export default function App() {
         position: 'absolute',
         left: activeCell.y * 42,
         top: activeCell.x * 42 + 53,
+        display: 'flex',
+        flexDirection: 'column',
+        rowGap: 10,
       }}
     >
       <TwitterPicker
-        color={cells[activeCell.x]?.[activeCell.y].color || '#fff'}
+        color={tempColor}
         onChangeComplete={(color) => {
-          updateCellColor(activeCell.x, activeCell.y, color.hex);
+          setTempColor(color.hex);
         }}
       />
+      <div className="button-container">
+        <button onClick={updateCell}>Update Cell</button>
+        <button onClick={hideColorPicker}>Cancel</button>
+      </div>
+    </div>
+  );
+
+  const overlay = (
+    <div
+      className="closePicker"
+      onClick={hideColorPicker}
+      style={{
+        zIndex: mining ? 1 : 0,
+        backgroundColor: mining ? 'rgb(255 123 11 / 50%)' : 'transparent',
+      }}
+    >
+      {mining && <Loading />}
     </div>
   );
 
   return (
     <div className="mainContainer">
-      <div className="header">🪀 Hey there!</div>
+      {overlay}
+      <div className="header">
+        🪀 Hey there! Choose a grid cell and update its color on a blockchain!
+      </div>
       <div className="dataContainer">
         {!currentAccount && (
           <button className="waveButton" onClick={connectWallet}>
@@ -199,17 +228,27 @@ export default function App() {
             return (
               <div key={x} className="row">
                 {rowItems.map((cell, y) => {
+                  const color =
+                    showColorPicker && x === activeCell.x && activeCell.y === y
+                      ? tempColor
+                      : cell.color || '#fff';
+
+                  const onCellSelected = () => {
+                    setActiveCell({ x, y });
+                    setTempColor(color);
+                    setShowColorPicker(true);
+                  };
                   return (
                     <div
                       className="cell"
-                      style={{ backgroundColor: cell.color || '#fff' }}
-                      index={y}
-                      onClick={() => {
-                        console.log({ x, y });
-                        setShowColorPicker(true);
-                        setActiveCell({ x, y });
-                      }}
-                    ></div>
+                      style={{ backgroundColor: color }}
+                      key={y}
+                      onClick={onCellSelected}
+                    >
+                      {cell.color && (
+                        <span className="tooltiptext">{cell.author}</span>
+                      )}
+                    </div>
                   );
                 })}
               </div>

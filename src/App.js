@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, Fragment } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { ethers } from 'ethers';
 import './App.css';
 import abi from './utils/WavePortal.json';
@@ -80,7 +80,6 @@ export default function App() {
   };
 
   const updateCellColor = (x, y, color, from) => {
-    console.log({ x, y, color });
     setCells((prevCells) => {
       const newCells = [...prevCells];
       newCells[x][y].color = color;
@@ -102,8 +101,6 @@ export default function App() {
       });
       cells.push(row);
     });
-    console.log({ cells, rawGrid });
-
     setCells(cells);
   };
 
@@ -117,7 +114,6 @@ export default function App() {
       await updateAllCellsFromETH(wavePortalContract);
 
       wavePortalContract.on('NewCell', (from, timestamp, color, x, y) => {
-        console.log({ from, timestamp, color, x, y });
         updateCellColor(x, y, color, from);
       });
     } catch (error) {
